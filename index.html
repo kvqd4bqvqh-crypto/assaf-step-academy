@@ -117,6 +117,9 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
     .animate-spin { animation: spin 1s linear infinite; }
+
+    /* Fallback for Tailwind hidden class */
+    .hidden { display: none !important; }
 </style>
 ```
 
@@ -131,14 +134,14 @@
         <h1 class="text-4xl font-black text-white mb-3">عساف STEP</h1>
         <p class="text-indigo-300 font-bold text-lg mb-2">النظام التكيّفي الذكي</p>
         <p class="text-slate-400 mb-10 leading-relaxed">بدل ما تسير على خطة جامدة، النظام يشخّص مستواك الحين ويبني مسارك الشخصي.</p>
-        <button onclick="startDiagnostic()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-12 py-5 rounded-2xl text-xl shadow-2xl shadow-indigo-900 transition-all hover:scale-105 active:scale-95">
+        <button id="start-diag-btn" onclick="startDiagnostic()" style="background:#4f46e5;color:white;font-weight:900;padding:1.25rem 3rem;border-radius:1rem;font-size:1.25rem;border:none;cursor:pointer;box-shadow:0 10px 40px rgba(79,70,229,0.4);">
             ابدأ الاختبار التشخيصي ⚡
         </button>
         <p class="text-slate-500 text-sm mt-4">15 سؤال · 5 دقائق تقريباً</p>
     </div>
 
 ```
-<div id="diag-quiz" class="w-full max-w-xl hidden">
+<div id="diag-quiz" class="w-full max-w-xl" style="display:none">
     <div class="mb-6">
         <div class="flex justify-between items-center mb-2">
             <span id="diag-q-num" class="text-indigo-300 font-bold text-sm"></span>
@@ -153,7 +156,7 @@
     <button id="diag-next-btn" onclick="nextDiagQuestion()" class="hidden w-full mt-6 bg-indigo-600 text-white font-black py-4 rounded-2xl transition hover:bg-indigo-500">التالي ←</button>
 </div>
 
-<div id="diag-result" class="w-full max-w-2xl hidden text-center">
+<div id="diag-result" class="w-full max-w-2xl text-center" style="display:none">
     <div class="text-6xl mb-4">🎯</div>
     <h2 class="text-3xl font-black text-white mb-2">التشخيص اكتمل!</h2>
     <p id="diag-result-text" class="text-indigo-200 text-lg mb-8 leading-relaxed"></p>
@@ -612,6 +615,15 @@
 </nav>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+    console.error('JS Error:', msg, 'Line:', line, 'Col:', col);
+    // Don't show alert to user, just log
+    return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+    console.error('Unhandled promise rejection:', e.reason);
+});
+
 // ============================================================
 // DATA - All Topics & Content
 // ============================================================
@@ -937,11 +949,15 @@ let state = {
 };
 
 function loadState() {
-    const saved = localStorage.getItem('assaf_adaptive_v1');
-    if (saved) state = {...state, ...JSON.parse(saved)};
+    try {
+        const saved = localStorage.getItem('assaf_adaptive_v2');
+        if (saved) state = {...state, ...JSON.parse(saved)};
+    } catch(e) {
+        localStorage.removeItem('assaf_adaptive_v2');
+    }
 }
 function saveState() {
-    localStorage.setItem('assaf_adaptive_v1', JSON.stringify(state));
+    localStorage.setItem('assaf_adaptive_v2', JSON.stringify(state));
 }
 loadState();
 
@@ -951,25 +967,34 @@ loadState();
 let diagIdx = 0, diagAnswered = false, diagResults = {};
 
 function startDiagnostic() {
-    document.getElementById('diag-welcome').classList.add('hidden');
-    document.getElementById('diag-quiz').classList.remove('hidden');
-    diagIdx = 0; diagResults = {};
-    loadDiagQuestion();
+    try {
+        document.getElementById('diag-welcome').style.display = 'none';
+        document.getElementById('diag-quiz').style.display = 'block';
+        diagIdx = 0; diagResults = {};
+        loadDiagQuestion();
+    } catch(e) {
+        console.error('startDiagnostic error:', e);
+        alert('خطأ: ' + e.message);
+    }
 }
 
 function loadDiagQuestion() {
-    diagAnswered = false;
-    const q = diagnosticQuestions[diagIdx];
-    document.getElementById('diag-q-num').textContent = `السؤال ${diagIdx + 1} من ${diagnosticQuestions.length}`;
-    document.getElementById('diag-q-cat').textContent = q.cat;
-    document.getElementById('diag-progress-fill').style.width = ((diagIdx / diagnosticQuestions.length) * 100) + '%';
-    document.getElementById('diag-question').textContent = q.q;
-    document.getElementById('diag-next-btn').classList.add('hidden');
-
-    const opts = document.getElementById('diag-options');
-    opts.innerHTML = q.o.map((opt, i) => `
-        <button onclick="answerDiag(${i})" class="diag-option" id="diag-opt-${i}">${opt}</button>
-    `).join('');
+    try {
+        diagAnswered = false;
+        const q = diagnosticQuestions[diagIdx];
+        if (!q) { console.error('No question at index', diagIdx); return; }
+        document.getElementById('diag-q-num').textContent = 'السؤال ' + (diagIdx + 1) + ' من ' + diagnosticQuestions.length;
+        document.getElementById('diag-q-cat').textContent = q.cat;
+        document.getElementById('diag-progress-fill').style.width = ((diagIdx / diagnosticQuestions.length) * 100) + '%';
+        document.getElementById('diag-question').textContent = q.q;
+        document.getElementById('diag-next-btn').classList.add('hidden');
+        const opts = document.getElementById('diag-options');
+        opts.innerHTML = q.o.map(function(opt, i) {
+            return '<button onclick="answerDiag(' + i + ')" class="diag-option" id="diag-opt-' + i + '">' + opt + '</button>';
+        }).join('');
+    } catch(e) {
+        console.error('loadDiagQuestion error:', e);
+    }
 }
 
 function answerDiag(chosen) {
@@ -995,8 +1020,8 @@ function nextDiagQuestion() {
 }
 
 function showDiagResults() {
-    document.getElementById('diag-quiz').classList.add('hidden');
-    document.getElementById('diag-result').classList.remove('hidden');
+    document.getElementById('diag-quiz').style.display = 'none';
+    document.getElementById('diag-result').style.display = 'block';
 
     // Calculate strengths
     let weak = [], strong = [];
@@ -1924,6 +1949,9 @@ if (state.diagnosed) {
     renderTopics();
     renderFlashcards();
     updatePastScores();
+} else {
+    // Make sure diag screen is visible and button works
+    document.getElementById('diag-screen').style.display = 'flex';
 }
 ```
 
@@ -1931,3 +1959,4 @@ if (state.diagnosed) {
 </script>
 
 </body>
+</html>
